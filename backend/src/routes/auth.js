@@ -20,6 +20,27 @@ const RESET_RESEND_COOLDOWN_MS = 60 * 1000;
 const RESET_MAX_ATTEMPTS = 5;
 const ADMIN_COOKIE_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000;
 
+/**
+ * Attributes for the admin session cookie.
+ *
+ * In production the dashboard and the API sit on different origins (two
+ * separate *.vercel.app subdomains, and vercel.app is on the Public Suffix
+ * List, so they count as different sites). A `SameSite=Lax` cookie is simply
+ * not sent on those cross-site requests, so login would appear to succeed and
+ * every request after it would come back 401. `None` requires `Secure`.
+ *
+ * Locally both run on http://localhost, which is same-site, so `Lax` is kept
+ * there — `Secure` over plain HTTP would be dropped by some browsers.
+ */
+function adminCookieOptions() {
+  const isProd = process.env.NODE_ENV === 'production';
+  return {
+    httpOnly: true,
+    sameSite: isProd ? 'none' : 'lax',
+    secure: isProd,
+  };
+}
+
 function isValidEmail(email) {
   return typeof email === 'string' && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
 }
@@ -116,16 +137,16 @@ router.post('/admin/login', async (req, res) => {
 
   const accessToken = signAccessToken(user, { expiresIn: '7d' });
   res.cookie('accessToken', accessToken, {
-    httpOnly: true,
-    sameSite: 'lax',
-    secure: process.env.NODE_ENV === 'production',
+    ...adminCookieOptions(),
     maxAge: ADMIN_COOKIE_MAX_AGE_MS,
   });
   res.json({ user: serializeUser(user) });
 });
 
 router.post('/admin/logout', (req, res) => {
-  res.clearCookie('accessToken');
+  // Must repeat the same attributes, or the browser treats it as a different
+  // cookie and the session survives the logout.
+  res.clearCookie('accessToken', adminCookieOptions());
   res.json({ ok: true });
 });
 
