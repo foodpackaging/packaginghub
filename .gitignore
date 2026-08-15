@@ -1,0 +1,17 @@
+backend/.env
+backend/node_modules/
+backend/build/
+backend/dist/
+
+mobile_app/.env
+mobile_app/build/
+mobile_app/.dart_tool/
+mobile_app/pubspec.lock
+
+admin_dashboard/node_modules/
+admin_dashboard/dist/
+admin_dashboard/.env.local
+
+.env.local
+.DS_Store
+*.swp
