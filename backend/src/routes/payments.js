@@ -84,8 +84,12 @@ router.post('/razorpay/verify', requireAuth, asyncHandler(async (req, res) => {
   // match the one this order's own /create-order call stored stops a
   // customer replaying a valid signature from one of their paid orders
   // against a different, unpaid one of theirs.
-  const order = await Order.findOneAndUpdate(
-    { _id: appOrderId, userId: req.user._id, razorpayOrderId: orderId },
+  //
+  // findOneAndUpdate with paymentStatus: { $ne: 'paid' } makes this idempotent:
+  // if the webhook already marked the order paid before the client called here,
+  // this is a no-op and we still return the current order state below.
+  let order = await Order.findOneAndUpdate(
+    { _id: appOrderId, userId: req.user._id, razorpayOrderId: orderId, paymentStatus: { $ne: 'paid' } },
     {
       paymentStatus: 'paid',
       razorpayPaymentId: paymentId,
@@ -93,10 +97,26 @@ router.post('/razorpay/verify', requireAuth, asyncHandler(async (req, res) => {
     },
     { new: true }
   );
-  if (!order) return res.status(404).json({ error: 'Order not found' });
 
-  await dispatch(() => notifyPaymentSuccess(order));
+  // If the update matched nothing, the order was either already paid (webhook
+  // beat the client here — normal race) or genuinely not found. Distinguish
+  // the two so we don't surface a confusing 404 for a successfully paid order.
+  if (!order) {
+    order = await Order.findOne({ _id: appOrderId, userId: req.user._id, razorpayOrderId: orderId });
+    if (!order) return res.status(404).json({ error: 'Order not found' });
+    // Order exists but was already paid — return it as-is. Idempotent.
+  }
 
+  // Respond immediately. Notification is NOT dispatched here.
+  //
+  // Rationale: the Razorpay webhook (payment.captured) is the authoritative
+  // async notifier and fires notifyPaymentSuccess independently of this call.
+  // Awaiting Firebase inside /verify on Vercel serverless was the root cause
+  // of the 20-second client timeout — Firebase Admin's cold-start OAuth
+  // round-trip alone can take 5-10s before any FCM send happens. Since the
+  // webhook delivers the notification reliably (and is already idempotent),
+  // there is nothing to gain and a lot to lose by blocking the HTTP response
+  // on it here.
   res.json({ success: true, order: serializeOrder(order) });
 }));
 
