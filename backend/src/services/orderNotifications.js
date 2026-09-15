@@ -1,4 +1,5 @@
 const env = require('../config/env');
+const User = require('../models/User');
 const { notifyUser } = require('./pushService');
 
 /** Payment methods where money is collected up front, before the shop ships. */
@@ -209,11 +210,40 @@ function notifyEtaChanged(order, { wasDelayed = false } = {}) {
   );
 }
 
+/**
+ * Alerts every admin account that a new order has come in. There's no admin
+ * mobile app — the vendor uses the web dashboard — so this reuses the exact
+ * same DeviceToken/notifyUser plumbing as customer pushes; the dashboard
+ * registers a 'web' platform token the same way the app registers 'android'.
+ */
+async function notifyAdminNewOrder(order, customer) {
+  const admins = await User.find({ role: 'admin' }, '_id');
+  if (!admins.length) return null;
+
+  const itemCount = (order.items || []).reduce((sum, item) => sum + item.quantity, 0);
+  const customerName =
+    customer?.businessName ||
+    [customer?.firstName, customer?.lastName].filter(Boolean).join(' ').trim() ||
+    customer?.companyType ||
+    'A customer';
+
+  const title = `New Order #${order.orderNumber}`;
+  const body = `Restaurant: ${customerName} • Items: ${itemCount} • Total: ${formatAmount(order.totalAmount)}`;
+  const data = { route: 'admin_order_details', order_id: order._id.toString(), order_number: order.orderNumber };
+
+  return Promise.all(
+    admins.map((admin) =>
+      notifyUser(admin._id, { type: 'admin_new_order', title, body, orderId: order._id, data })
+    )
+  );
+}
+
 module.exports = {
   notifyOrderPlaced,
   notifyPaymentSuccess,
   notifyPaymentFailed,
   notifyStatusChanged,
   notifyEtaChanged,
+  notifyAdminNewOrder,
   isPrepaid,
 };

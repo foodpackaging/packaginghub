@@ -2,7 +2,7 @@ const express = require('express');
 const Filter = require('../models/Filter');
 const Product = require('../models/Product');
 const Category = require('../models/Category');
-const { requireAuth, requireAdmin } = require('../middleware/auth');
+const { requireAuth, requireAdmin, requireAdminForAllTrue } = require('../middleware/auth');
 const { serializeFilter } = require('../utils/serializers');
 const { shallowCamelize } = require('../utils/caseConvert');
 
@@ -12,7 +12,7 @@ const SAFE_KEY = /^[A-Za-z0-9_]+$/;
 // Handled by dedicated product fields, not the free-form attributes object.
 const RESERVED_KEYS = new Set(['price', 'brand', 'discount', 'availability']);
 
-router.get('/', async (req, res) => {
+router.get('/', requireAdminForAllTrue, async (req, res) => {
   const { category_id, subcategory_id, all } = req.query;
   const filter = {};
   // FilterManager (admin) manages inactive filters too, so it passes all=true.

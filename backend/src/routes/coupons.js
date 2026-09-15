@@ -3,16 +3,9 @@ const Coupon = require('../models/Coupon');
 const { requireAuth, requireAdmin } = require('../middleware/auth');
 const { serializeCoupon } = require('../utils/serializers');
 const { shallowCamelize } = require('../utils/caseConvert');
+const { computeDiscount } = require('../utils/pricing');
 
 const router = express.Router();
-
-function computeDiscount(coupon, orderAmount) {
-  if (coupon.discountType === 'percent') {
-    const raw = (orderAmount * coupon.discountValue) / 100;
-    return coupon.maxDiscountAmount ? Math.min(raw, coupon.maxDiscountAmount) : raw;
-  }
-  return Math.min(coupon.discountValue, orderAmount);
-}
 
 router.get('/', requireAuth, requireAdmin, async (req, res) => {
   const coupons = await Coupon.find().sort({ createdAt: -1 });

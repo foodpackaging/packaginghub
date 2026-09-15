@@ -6,6 +6,7 @@ function serializeUser(user) {
     last_name: user.lastName,
     phone: user.phone,
     work_email: user.workEmail,
+    business_name: user.businessName,
     company_type: user.companyType,
     role: user.businessRole,
     role_description: user.roleDescription,

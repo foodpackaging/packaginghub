@@ -16,6 +16,7 @@ class _OnboardingFormScreenState extends ConsumerState<OnboardingFormScreen> {
   final _formKey = GlobalKey<FormState>();
   final _apiService = ApiService();
 
+  String _businessName = '';
   String _firstName = '';
   String _lastName = '';
   String _phone = '';
@@ -34,6 +35,7 @@ class _OnboardingFormScreenState extends ConsumerState<OnboardingFormScreen> {
       try {
         // Save Step 1 data but DON'T mark as complete yet
         await _apiService.updateProfile({
+          'business_name': _businessName,
           'first_name': _firstName,
           'last_name': _lastName,
           'phone': _phone,
@@ -95,7 +97,18 @@ class _OnboardingFormScreenState extends ConsumerState<OnboardingFormScreen> {
                 style: TextStyle(color: Colors.grey),
               ),
               const SizedBox(height: defaultPadding * 2),
-              
+
+              TextFormField(
+                decoration: const InputDecoration(
+                  labelText: "Business / Restaurant Name",
+                  hintText: "ABC Restaurant",
+                  prefixIcon: Icon(Icons.storefront_outlined, size: 20),
+                ),
+                validator: (value) => value!.isEmpty ? "Required" : null,
+                onSaved: (value) => _businessName = value!,
+              ),
+              const SizedBox(height: defaultPadding),
+
               Row(
                 children: [
                   Expanded(
@@ -184,12 +197,13 @@ class _OnboardingFormScreenState extends ConsumerState<OnboardingFormScreen> {
 
               TextFormField(
                 decoration: const InputDecoration(
-                  labelText: "GST Number", 
+                  labelText: "GST Number (optional)",
                   hintText: "22AAAAA0000A1Z5",
                   prefixIcon: Icon(Icons.receipt_long, size: 20),
                 ),
-                validator: (value) => value!.isEmpty ? "Enter GST number" : null,
-                onSaved: (value) => _gstNumber = value!,
+                // Not every business is GST-registered — this is optional
+                // server-side too (User.gstNumber has no required validation).
+                onSaved: (value) => _gstNumber = value ?? '',
               ),
               const SizedBox(height: defaultPadding * 3),
 

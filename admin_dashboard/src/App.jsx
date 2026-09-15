@@ -1,5 +1,6 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { api } from './apiClient';
+import { registerAdminPush } from './pushService';
 import Login from './components/Login';
 import AddProduct from './components/AddProduct';
 import Inventory from './components/Inventory';
@@ -17,10 +18,26 @@ function App() {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [authChecked, setAuthChecked] = useState(false);
   const [isLoggedIn, setIsLoggedIn] = useState(false);
+  // A push notification's service-worker click reopens the dashboard at
+  // /?order=<id> (see public/firebase-messaging-sw.js), same as a manually
+  // shared link — read once, up front, as the initial state itself rather
+  // than in an effect after mount (avoids a render where the wrong tab
+  // flashes before an effect could correct it).
+  const initialOrderId = useState(() => new URLSearchParams(window.location.search).get('order'))[0];
   const [activeTab, setActiveTab] = useState(() => {
+    if (initialOrderId) return 'orders';
     return localStorage.getItem('adminActiveTab') || 'inventory';
   });
   const [editingProduct, setEditingProduct] = useState(null);
+  // Set when a push notification's click (or a ?order= link) should jump
+  // straight to a specific order in the Orders tab.
+  const [focusOrderId, setFocusOrderId] = useState(initialOrderId);
+
+  const goToOrder = useCallback((orderId) => {
+    setActiveTab('orders');
+    localStorage.setItem('adminActiveTab', 'orders');
+    setFocusOrderId(orderId);
+  }, []);
 
   useEffect(() => {
     api.get('/auth/me')
@@ -28,6 +45,13 @@ function App() {
       .catch(() => setIsLoggedIn(false))
       .finally(() => setAuthChecked(true));
   }, []);
+
+  // Registers this browser for new-order push notifications once logged in.
+  // A no-op if Firebase web config isn't set — see src/pushService.js.
+  useEffect(() => {
+    if (!isLoggedIn) return;
+    registerAdminPush({ onOrderDeepLink: goToOrder });
+  }, [isLoggedIn, goToOrder]);
 
   const handleLogin = () => {
     setIsLoggedIn(true);
@@ -264,7 +288,7 @@ function App() {
             ) : activeTab === 'banners' ? (
               <BannerManager />
             ) : activeTab === 'orders' ? (
-              <OrderManager />
+              <OrderManager focusOrderId={focusOrderId} onFocusHandled={() => setFocusOrderId(null)} />
             ) : activeTab === 'customers' ? (
               <CustomerManager />
             ) : activeTab === 'returns' ? (

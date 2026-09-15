@@ -114,6 +114,8 @@ class Product {
   bool get hasDiscount => discountPercent > 0;
   double get savings => price - discountedPrice;
   String get image => images.isNotEmpty ? images.first : "";
+  /// Whether there's enough stock left to actually place a minimum order.
+  bool get canFulfillMoq => stockQuantity >= minOrderQty;
 }
 
 List<ProductInformationSection> _parseProductInformationSections(Map<String, dynamic> json) {

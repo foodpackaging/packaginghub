@@ -26,6 +26,9 @@ module.exports = {
   razorpay: {
     keyId: process.env.RAZORPAY_KEY_ID,
     keySecret: process.env.RAZORPAY_KEY_SECRET,
+    // Separate from keySecret — configured in the Razorpay dashboard's webhook
+    // settings, not the API keys page. Signs webhook deliveries only.
+    webhookSecret: process.env.RAZORPAY_WEBHOOK_SECRET,
   },
   firebase: {
     /**

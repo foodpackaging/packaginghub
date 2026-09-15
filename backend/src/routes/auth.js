@@ -11,7 +11,9 @@ const {
 } = require('../utils/tokens');
 const { sendPasswordResetEmail } = require('../utils/mailer');
 const { requireAuth } = require('../middleware/auth');
+const { loginLimiter, signupLimiter, resetLimiter } = require('../middleware/rateLimit');
 const { serializeUser } = require('../utils/serializers');
+const { asyncHandler } = require('../utils/asyncHandler');
 
 const router = express.Router();
 
@@ -92,7 +94,7 @@ function tokenPair(user) {
   return { access_token: signAccessToken(user), refresh_token: signRefreshToken(user) };
 }
 
-router.post('/signup', async (req, res) => {
+router.post('/signup', signupLimiter, asyncHandler(async (req, res) => {
   const { password } = req.body;
   const email = normalizeEmail(req.body.email);
   if (!isValidEmail(email) || !password || password.length < 6) {
@@ -106,9 +108,9 @@ router.post('/signup', async (req, res) => {
   const user = await User.create({ email, passwordHash, role: 'customer' });
 
   res.status(201).json({ ...tokenPair(user), user: serializeUser(user) });
-});
+}));
 
-router.post('/login', async (req, res) => {
+router.post('/login', loginLimiter, asyncHandler(async (req, res) => {
   const { password } = req.body;
   const email = normalizeEmail(req.body.email);
   if (!isValidEmail(email) || !password) {
@@ -121,9 +123,9 @@ router.post('/login', async (req, res) => {
   }
 
   res.json({ ...tokenPair(user), user: serializeUser(user) });
-});
+}));
 
-router.post('/admin/login', async (req, res) => {
+router.post('/admin/login', loginLimiter, asyncHandler(async (req, res) => {
   const { password } = req.body;
   const email = normalizeEmail(req.body.email);
   if (!isValidEmail(email) || !password) {
@@ -141,7 +143,7 @@ router.post('/admin/login', async (req, res) => {
     maxAge: ADMIN_COOKIE_MAX_AGE_MS,
   });
   res.json({ user: serializeUser(user) });
-});
+}));
 
 router.post('/admin/logout', (req, res) => {
   // Must repeat the same attributes, or the browser treats it as a different
@@ -150,7 +152,7 @@ router.post('/admin/logout', (req, res) => {
   res.json({ ok: true });
 });
 
-router.post('/refresh', async (req, res) => {
+router.post('/refresh', asyncHandler(async (req, res) => {
   const { refresh_token: refreshToken } = req.body;
   if (!refreshToken) return res.status(400).json({ error: 'refresh_token is required' });
 
@@ -163,7 +165,7 @@ router.post('/refresh', async (req, res) => {
   } catch (err) {
     res.status(401).json({ error: 'Invalid or expired refresh token' });
   }
-});
+}));
 
 router.get('/me', requireAuth, (req, res) => {
   res.json({ user: serializeUser(req.user) });
@@ -173,7 +175,7 @@ router.post('/logout', requireAuth, (req, res) => {
   res.json({ ok: true });
 });
 
-router.post('/forgot-password', async (req, res) => {
+router.post('/forgot-password', resetLimiter, asyncHandler(async (req, res) => {
   const email = normalizeEmail(req.body.email);
   if (!isValidEmail(email)) return res.status(400).json({ error: 'Valid email is required' });
 
@@ -204,11 +206,11 @@ router.post('/forgot-password', async (req, res) => {
   await user.save();
 
   res.json({ ok: true });
-});
+}));
 
 // Step 1 of the reset flow: confirm the code before the app asks for a new password.
 // Deliberately does not consume the code — /reset-password re-checks it on submit.
-router.post('/verify-reset-code', async (req, res) => {
+router.post('/verify-reset-code', resetLimiter, asyncHandler(async (req, res) => {
   const email = normalizeEmail(req.body.email);
   const code = normalizeResetCode(req.body.code);
   if (!isValidEmail(email) || !code) {
@@ -220,9 +222,9 @@ router.post('/verify-reset-code', async (req, res) => {
   if (failure) return res.status(failure.status).json({ error: failure.error });
 
   res.json({ ok: true });
-});
+}));
 
-router.post('/reset-password', async (req, res) => {
+router.post('/reset-password', resetLimiter, asyncHandler(async (req, res) => {
   const { new_password: newPassword } = req.body;
   const email = normalizeEmail(req.body.email);
   const code = normalizeResetCode(req.body.code);
@@ -239,9 +241,9 @@ router.post('/reset-password', async (req, res) => {
   await user.save();
 
   res.json({ ok: true });
-});
+}));
 
-router.post('/update-password', requireAuth, async (req, res) => {
+router.post('/update-password', requireAuth, asyncHandler(async (req, res) => {
   const { new_password: newPassword } = req.body;
   if (!newPassword || newPassword.length < 6) {
     return res.status(400).json({ error: 'A new password of at least 6 characters is required' });
@@ -249,6 +251,6 @@ router.post('/update-password', requireAuth, async (req, res) => {
   req.user.passwordHash = await bcrypt.hash(newPassword, 10);
   await req.user.save();
   res.json({ ok: true });
-});
+}));
 
 module.exports = router;

@@ -2,6 +2,8 @@ import { useEffect, useMemo, useState } from 'react';
 import { api } from '../apiClient';
 import { Clock, Loader2, MapPin, PackageCheck, RefreshCcw, Search, Truck } from 'lucide-react';
 
+const PAGE_SIZE = 25;
+
 const money = (value) => `Rs. ${Number(value || 0).toFixed(2)}`;
 
 const paymentLabel = (method) => {
@@ -25,21 +27,46 @@ const statusClasses = {
 
 const etaIsoFromNow = (minutes) => new Date(Date.now() + minutes * 60 * 1000).toISOString();
 
-const OrderManager = () => {
+const OrderManager = ({ focusOrderId, onFocusHandled } = {}) => {
   const [orders, setOrders] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [hasMore, setHasMore] = useState(false);
+  const [pagesLoaded, setPagesLoaded] = useState(1);
   const [search, setSearch] = useState('');
   const [etaValues, setEtaValues] = useState({});
   const [savingEtaId, setSavingEtaId] = useState(null);
   const [error, setError] = useState('');
+  const [highlightId, setHighlightId] = useState(null);
 
-  const fetchOrders = async () => {
+  const applyEtaValues = (rows) => {
+    setEtaValues((prev) => {
+      const next = { ...prev };
+      rows.forEach((order) => {
+        if (order.estimated_delivery_time) {
+          const d = new Date(order.estimated_delivery_time);
+          next[order.id] = `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+        } else if (!(order.id in next)) {
+          next[order.id] = '';
+        }
+      });
+      return next;
+    });
+  };
+
+  // Refreshing (poll or a new-order push) always re-fetches page 1 — new
+  // orders sort to the top, so that's the page that's actually changed.
+  // "Load more" instead appends however many pages the admin has paged
+  // through, so scrolling down doesn't reset when the poll fires.
+  const fetchOrders = async ({ append = false } = {}) => {
     setError('');
-    setLoading(true);
+    if (append) setLoadingMore(true);
+    else setLoading(true);
 
     try {
-      const [{ orders: orderRows }, { customers }] = await Promise.all([
-        api.get('/orders/admin/all'),
+      const pagesToFetch = append ? pagesLoaded + 1 : 1;
+      const [{ orders: orderRows, has_more: more }, { customers }] = await Promise.all([
+        api.get(`/orders/admin/all?page=${pagesToFetch}&limit=${PAGE_SIZE}`),
         api.get('/customers'),
       ]);
 
@@ -49,32 +76,53 @@ const OrderManager = () => {
         profile: profilesById.get(order.user_id),
       }));
 
-      setOrders(merged);
-      setEtaValues(
-        merged.reduce((acc, order) => {
-          if (order.estimated_delivery_time) {
-            const d = new Date(order.estimated_delivery_time);
-            acc[order.id] = `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
-          } else {
-            acc[order.id] = '';
-          }
-          return acc;
-        }, {})
-      );
+      setOrders((prev) => (append ? [...prev, ...merged] : merged));
+      setHasMore(!!more);
+      setPagesLoaded(pagesToFetch);
+      applyEtaValues(merged);
     } catch (err) {
       setError(err.message);
     }
     setLoading(false);
+    setLoadingMore(false);
   };
+
+  const loadMore = () => fetchOrders({ append: true });
 
   useEffect(() => {
     const initialFetch = window.setTimeout(fetchOrders, 0);
-    const interval = window.setInterval(fetchOrders, 30000);
+    // Push (see App.jsx/pushService.js) now covers the "a new order just
+    // arrived" case near-instantly; this interval is only the fallback for
+    // when push isn't configured or a message is missed.
+    const interval = window.setInterval(fetchOrders, 60000);
     return () => {
       window.clearTimeout(initialFetch);
       window.clearInterval(interval);
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // Jump to and briefly highlight an order opened from a push notification.
+  // New-order pushes always refer to the newest order, which page 1 already
+  // contains, so no extra fetch is needed here.
+  useEffect(() => {
+    if (!focusOrderId) return;
+    const el = document.getElementById(`order-${focusOrderId}`);
+    if (!el) {
+      onFocusHandled?.();
+      return;
+    }
+    el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    onFocusHandled?.();
+    // Deferred rather than called directly in the effect body, so this state
+    // update happens in a callback instead of synchronously during the effect.
+    const highlightTimer = window.setTimeout(() => setHighlightId(focusOrderId), 0);
+    const clearTimer = window.setTimeout(() => setHighlightId(null), 3000);
+    return () => {
+      window.clearTimeout(highlightTimer);
+      window.clearTimeout(clearTimer);
+    };
+  }, [focusOrderId, orders, onFocusHandled]);
 
   const filteredOrders = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -185,15 +233,29 @@ const OrderManager = () => {
               onSaveEta={(isDelayed) => updateEta(order.id, isDelayed)}
               savingEta={savingEtaId === order.id}
               onUpdateStatus={(status, extra) => updateOrderStatus(order.id, status, extra)}
+              highlighted={highlightId === order.id}
             />
           ))}
+
+          {hasMore && !search && (
+            <div className="flex justify-center pt-2">
+              <button
+                onClick={loadMore}
+                disabled={loadingMore}
+                className="inline-flex items-center gap-2 px-4 py-2.5 bg-white hover:bg-slate-50 border border-slate-200 disabled:opacity-60 text-slate-600 rounded-xl text-sm font-semibold transition-all cursor-pointer"
+              >
+                {loadingMore ? <Loader2 size={15} className="animate-spin" /> : null}
+                Load more orders
+              </button>
+            </div>
+          )}
         </div>
       )}
     </div>
   );
 };
 
-const OrderCard = ({ order, etaValue, onEtaChange, onSaveEta, savingEta, onUpdateStatus }) => {
+const OrderCard = ({ order, etaValue, onEtaChange, onSaveEta, savingEta, onUpdateStatus, highlighted = false }) => {
   const profile = order.profile || {};
   const customerName = order.delivery_address?.name || `${profile.first_name || ''} ${profile.last_name || ''}`.trim() || 'Customer';
   const address = order.delivery_address?.address || profile.address || null;
@@ -205,7 +267,12 @@ const OrderCard = ({ order, etaValue, onEtaChange, onSaveEta, savingEta, onUpdat
   const isDelivery = order.delivery_method === 'delivery';
 
   return (
-    <div className="bg-white border border-slate-100 rounded-xl p-5 shadow-sm">
+    <div
+      id={`order-${order.id}`}
+      className={`bg-white border rounded-xl p-5 shadow-sm transition-colors duration-500 ${
+        highlighted ? 'border-indigo-400 ring-2 ring-indigo-200 bg-indigo-50/40' : 'border-slate-100'
+      }`}
+    >
       <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
         <div className="space-y-3">
           <div className="flex flex-wrap items-center gap-2">

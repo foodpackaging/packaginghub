@@ -30,4 +30,19 @@ function requireAdmin(req, res, next) {
   next();
 }
 
-module.exports = { requireAuth, requireAdmin, getBearerToken };
+/**
+ * Gates the `?all=true` bypass some public catalog GET routes (categories,
+ * products, filters) offer the admin dashboard to see inactive/unpublished
+ * records. Without this, anyone unauthenticated could pass all=true and see
+ * the same data. When all=true isn't requested, this is a no-op and the
+ * route stays public, same as before.
+ */
+async function requireAdminForAllTrue(req, res, next) {
+  if (req.query.all !== 'true') return next();
+  await requireAuth(req, res, (err) => {
+    if (err) return next(err);
+    requireAdmin(req, res, next);
+  });
+}
+
+module.exports = { requireAuth, requireAdmin, requireAdminForAllTrue, getBearerToken };

@@ -122,8 +122,14 @@ class CartController extends ChangeNotifier {
       _items[index] = _items[index].copyWith(quantity: _items[index].quantity + 1);
       debugPrint("Item already in cart. Incrementing quantity to: ${_items[index].quantity}");
     } else {
-      _items.add(CartItem(product: product, quantity: 1));
-      debugPrint("New item added to cart.");
+      // A product with a minimum order quantity can't meaningfully be added
+      // at "1" if the MOQ is higher — there's no valid quantity between 1
+      // and the MOQ, so the first add jumps straight to it. The backend
+      // enforces this too and is authoritative; this just keeps the cart
+      // from showing a quantity it already knows will be rejected.
+      final startingQuantity = product.minOrderQty > 1 ? product.minOrderQty : 1;
+      _items.add(CartItem(product: product, quantity: startingQuantity));
+      debugPrint("New item added to cart at starting quantity: $startingQuantity");
     }
     debugPrint("Total items in cart memory now: ${_items.length}");
     if (appliedCouponCode != null) applyCoupon(appliedCouponCode!);
@@ -173,7 +179,12 @@ class CartController extends ChangeNotifier {
   }
 
   void decrementQuantity(int index) {
-    if (_items[index].quantity > 1) {
+    final moq = _items[index].product.minOrderQty;
+    final floor = moq > 1 ? moq : 1;
+    // Below the MOQ there's no valid quantity to sit at — dropping under it
+    // removes the item entirely rather than leaving an unorderable amount
+    // in the cart.
+    if (_items[index].quantity > floor) {
       _items[index] = _items[index].copyWith(quantity: _items[index].quantity - 1);
     } else {
       _items.removeAt(index);

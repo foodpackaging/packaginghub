@@ -13,6 +13,7 @@ const EDITABLE_FIELD_MAP = {
   last_name: 'lastName',
   phone: 'phone',
   work_email: 'workEmail',
+  business_name: 'businessName',
   company_type: 'companyType',
   role: 'businessRole',
   role_description: 'roleDescription',

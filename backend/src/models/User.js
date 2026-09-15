@@ -10,6 +10,9 @@ const userSchema = new mongoose.Schema(
     lastName: { type: String, default: '' },
     phone: { type: String, default: '' },
     workEmail: { type: String, default: '' },
+    // The actual business/restaurant name (e.g. "ABC Restaurant"), distinct
+    // from companyType, which is a category ("Restaurant"/"Cafe"/"Hotel").
+    businessName: { type: String, default: '' },
     companyType: { type: String, default: '' },
     businessRole: { type: String, default: '' },
     roleDescription: { type: String, default: '' },

@@ -64,8 +64,12 @@ class ApiService {
 
   // ==================== ORDERS ====================
 
-  Future<Order> createOrder(Map<String, dynamic> orderData) async {
-    final response = await _client.post('/orders', body: orderData);
+  Future<Order> createOrder(Map<String, dynamic> orderData, {String? idempotencyKey}) async {
+    final response = await _client.post(
+      '/orders',
+      body: orderData,
+      headers: idempotencyKey != null ? {'Idempotency-Key': idempotencyKey} : null,
+    );
     return Order.fromJson(response['order'] as Map<String, dynamic>);
   }
 

@@ -3,9 +3,10 @@ const mongoose = require('mongoose');
 const Product = require('../models/Product');
 const Category = require('../models/Category');
 const Filter = require('../models/Filter');
-const { requireAuth, requireAdmin } = require('../middleware/auth');
+const { requireAuth, requireAdmin, requireAdminForAllTrue } = require('../middleware/auth');
 const { serializeProduct } = require('../utils/serializers');
 const { shallowCamelize } = require('../utils/caseConvert');
+const { asyncHandler } = require('../utils/asyncHandler');
 const {
   SORT_OPTIONS,
   DEFAULT_SORT,
@@ -46,7 +47,7 @@ async function filterableAttributeKeys(categoryId, subcategoryId) {
   return [...new Set(filters.map((f) => f.key))].filter((k) => !reserved.has(k));
 }
 
-router.get('/', async (req, res) => {
+router.get('/', requireAdminForAllTrue, asyncHandler(async (req, res) => {
   const { search, category_id, brand, featured, flash_sale, min_price, max_price, limit, skip, all, sort } = req.query;
   const filter = {};
   // The admin dashboard manages inactive products too, so it passes all=true;
@@ -88,14 +89,14 @@ router.get('/', async (req, res) => {
     skip: effectiveSkip,
     has_more: effectiveSkip + products.length < total,
   });
-});
+}));
 
 // POST because the active-filters shape (ranges, lists, arbitrary attribute keys) doesn't
 // serialize cleanly into query params.
 //
 // Returns the page of products, the true total, and facet counts in one round trip.
 // `products` is kept at the top level so existing clients keep working.
-router.post('/filtered', async (req, res) => {
+router.post('/filtered', asyncHandler(async (req, res) => {
   const {
     category_id: categoryId,
     subcategory_id: subcategoryId,
@@ -148,12 +149,12 @@ router.post('/filtered', async (req, res) => {
     sort_options: Object.keys(SORT_OPTIONS),
     ...(includeFacets ? { facets: shapeFacets(raw || {}, attributeKeys) } : {}),
   });
-});
+}));
 
-router.get('/brands', async (req, res) => {
+router.get('/brands', asyncHandler(async (req, res) => {
   const brands = await Product.distinct('brand', { isActive: true, brand: { $ne: '' } });
   res.json({ brands: brands.sort() });
-});
+}));
 
 // Attribute keys are interpolated into a query path, so anything outside this set
 // (notably '.' and '$') must be rejected rather than escaped.
@@ -166,7 +167,7 @@ const SAFE_KEY = /^[A-Za-z0-9_]+$/;
  * instead of the author guessing and typing them by hand — a filter whose options
  * don't match the stored values silently matches nothing.
  */
-router.get('/attribute-values', requireAuth, requireAdmin, async (req, res) => {
+router.get('/attribute-values', requireAuth, requireAdmin, asyncHandler(async (req, res) => {
   const { key, category_id: categoryId } = req.query;
   if (!key || !SAFE_KEY.test(key)) {
     return res.status(400).json({ error: 'A valid attribute key (letters, numbers, underscore) is required' });
@@ -195,28 +196,28 @@ router.get('/attribute-values', requireAuth, requireAdmin, async (req, res) => {
     .map((r) => ({ value: r._id, count: r.count }));
 
   res.json({ key, values, total_products: values.reduce((sum, v) => sum + v.count, 0) });
-});
+}));
 
-router.get('/:id', async (req, res) => {
+router.get('/:id', asyncHandler(async (req, res) => {
   const product = await Product.findById(req.params.id);
   if (!product) return res.status(404).json({ error: 'Product not found' });
   res.json({ product: serializeProduct(product) });
-});
+}));
 
-router.post('/', requireAuth, requireAdmin, async (req, res) => {
+router.post('/', requireAuth, requireAdmin, asyncHandler(async (req, res) => {
   const product = await Product.create(shallowCamelize(req.body));
   res.status(201).json({ product: serializeProduct(product) });
-});
+}));
 
-router.patch('/:id', requireAuth, requireAdmin, async (req, res) => {
+router.patch('/:id', requireAuth, requireAdmin, asyncHandler(async (req, res) => {
   const product = await Product.findByIdAndUpdate(req.params.id, shallowCamelize(req.body), { new: true });
   if (!product) return res.status(404).json({ error: 'Product not found' });
   res.json({ product: serializeProduct(product) });
-});
+}));
 
-router.delete('/:id', requireAuth, requireAdmin, async (req, res) => {
+router.delete('/:id', requireAuth, requireAdmin, asyncHandler(async (req, res) => {
   await Product.findByIdAndDelete(req.params.id);
   res.json({ ok: true });
-});
+}));
 
 module.exports = router;

@@ -24,7 +24,11 @@ const app = express();
 
 app.use(cors({ origin: env.corsOrigins, credentials: true }));
 app.use(cookieParser());
-app.use(express.json());
+// Captures the exact raw request bytes alongside the normal parsed req.body.
+// Needed for the Razorpay webhook, whose signature is computed over the raw
+// body — the re-serialized JSON object is not guaranteed byte-identical to
+// what Razorpay actually sent. Harmless for every other route.
+app.use(express.json({ verify: (req, res, buf) => { req.rawBody = buf; } }));
 
 app.get('/health', (req, res) => res.json({ ok: true }));
 

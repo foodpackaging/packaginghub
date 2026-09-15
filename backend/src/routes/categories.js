@@ -1,12 +1,12 @@
 const express = require('express');
 const Category = require('../models/Category');
-const { requireAuth, requireAdmin } = require('../middleware/auth');
+const { requireAuth, requireAdmin, requireAdminForAllTrue } = require('../middleware/auth');
 const { serializeCategory } = require('../utils/serializers');
 const { shallowCamelize } = require('../utils/caseConvert');
 
 const router = express.Router();
 
-router.get('/', async (req, res) => {
+router.get('/', requireAdminForAllTrue, async (req, res) => {
   const filter = {};
   // The admin dashboard manages inactive categories too, so it passes all=true;
   // the customer-facing app only ever wants active ones.

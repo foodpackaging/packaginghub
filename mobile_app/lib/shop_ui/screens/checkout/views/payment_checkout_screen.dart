@@ -107,9 +107,14 @@ class _PaymentCheckoutScreenState extends State<PaymentCheckoutScreen> {
     try {
       cart.toggleDelivery(true);
 
-      // Snapshot total BEFORE anything async clears the cart
-      final totalAmount = cart.total;
-      
+      // Local total is display-only now — shown in the Razorpay sheet before
+      // it opens, purely for UI continuity. It has no bearing on what's
+      // actually charged: that amount is fixed server-side and bound to
+      // razorpayOrder['id'] the moment the backend creates it (see
+      // POST /api/payments/razorpay/create-order), from the order's own
+      // server-computed total, not from anything sent by this client.
+      final displayAmount = cart.total;
+
       if (_paymentMethod == 'online') {
         // 1. Create the order with 'pending' status — do NOT clear cart yet
         final orderId = await _orderCheckoutService.placeOrder(
@@ -120,13 +125,14 @@ class _PaymentCheckoutScreenState extends State<PaymentCheckoutScreen> {
         );
         _currentPendingOrderId = orderId;
 
-        // 2. Create Razorpay order via Edge Function using snapshotted total
-        final razorpayOrder = await _orderCheckoutService.createRazorpayOrder(totalAmount);
-        
+        // 2. Create the Razorpay-side order for this app order — the backend
+        // decides the amount from the order it already created above.
+        final razorpayOrder = await _orderCheckoutService.createRazorpayOrder(orderId);
+
         // 3. Open Razorpay UI
         var options = {
           'key': dotenv.env['RAZORPAY_KEY_ID'] ?? '',
-          'amount': (totalAmount * 100).round(),
+          'amount': (displayAmount * 100).round(),
           'name': 'B2B Store',
           'description': 'Order Payment',
           'order_id': razorpayOrder['id'],

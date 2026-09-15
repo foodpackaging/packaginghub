@@ -70,17 +70,25 @@ class ApiClient {
 
   Future<dynamic> get(String path, {Map<String, dynamic>? query}) => _send('GET', _uri(path, query));
 
-  Future<dynamic> post(String path, {Object? body}) => _send('POST', _uri(path), body: body);
+  Future<dynamic> post(String path, {Object? body, Map<String, String>? headers}) =>
+      _send('POST', _uri(path), body: body, extraHeaders: headers);
 
   Future<dynamic> patch(String path, {Object? body}) => _send('PATCH', _uri(path), body: body);
 
   Future<dynamic> delete(String path, {Object? body}) => _send('DELETE', _uri(path), body: body);
 
-  Future<dynamic> _send(String method, Uri uri, {Object? body, bool isRetry = false}) async {
+  Future<dynamic> _send(
+    String method,
+    Uri uri, {
+    Object? body,
+    Map<String, String>? extraHeaders,
+    bool isRetry = false,
+  }) async {
     final token = await accessToken;
     final headers = {
       'Content-Type': 'application/json',
       if (token != null) 'Authorization': 'Bearer $token',
+      if (extraHeaders != null) ...extraHeaders,
     };
     final encodedBody = body != null ? jsonEncode(body) : null;
 
@@ -114,7 +122,7 @@ class ApiClient {
 
     if (response.statusCode == 401 && !isRetry && token != null) {
       if (await _tryRefresh()) {
-        return _send(method, uri, body: body, isRetry: true);
+        return _send(method, uri, body: body, extraHeaders: extraHeaders, isRetry: true);
       }
       await clearTokens();
     }

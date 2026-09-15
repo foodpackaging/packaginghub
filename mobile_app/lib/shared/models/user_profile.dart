@@ -5,6 +5,7 @@ class UserProfile {
   final String? lastName;
   final String? phone;
   final String? workEmail;
+  final String? businessName;
   final String? companyType;
   final String? role;
   final String? roleDescription;
@@ -24,6 +25,7 @@ class UserProfile {
     this.lastName,
     this.phone,
     this.workEmail,
+    this.businessName,
     this.companyType,
     this.role,
     this.roleDescription,
@@ -47,6 +49,7 @@ class UserProfile {
       lastName: json['last_name']?.toString(),
       phone: json['phone']?.toString(),
       workEmail: json['work_email']?.toString(),
+      businessName: json['business_name']?.toString(),
       companyType: json['company_type']?.toString(),
       role: json['role']?.toString(),
       roleDescription: json['role_description']?.toString(),
@@ -71,6 +74,7 @@ class UserProfile {
       'last_name': lastName,
       'phone': phone,
       'work_email': workEmail,
+      'business_name': businessName,
       'company_type': companyType,
       'role': role,
       'role_description': roleDescription,
@@ -92,6 +96,7 @@ class UserProfile {
     String? lastName,
     String? phone,
     String? workEmail,
+    String? businessName,
     String? companyType,
     String? role,
     String? roleDescription,
@@ -111,6 +116,7 @@ class UserProfile {
       lastName: lastName ?? this.lastName,
       phone: phone ?? this.phone,
       workEmail: workEmail ?? this.workEmail,
+      businessName: businessName ?? this.businessName,
       companyType: companyType ?? this.companyType,
       role: role ?? this.role,
       roleDescription: roleDescription ?? this.roleDescription,

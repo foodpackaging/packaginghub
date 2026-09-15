@@ -25,6 +25,7 @@ const notificationSchema = new mongoose.Schema(
         'order_delivered',
         'order_picked_up',
         'order_cancelled',
+        'admin_new_order',
         'general',
       ],
       default: 'general',
