@@ -10,7 +10,17 @@ function required(name, fallback) {
 
 module.exports = {
   port: process.env.PORT || 4000,
-  corsOrigins: (process.env.CORS_ORIGIN || 'http://localhost:5173').split(',').map((s) => s.trim()),
+  // Production origins are always allowed — they must never depend on a Vercel
+  // env var being set, because forgetting to set/update it silently breaks the
+  // entire admin dashboard. The CORS_ORIGIN env var extends this list for local
+  // dev and any additional origins without replacing these permanent entries.
+  corsOrigins: Array.from(new Set([
+    'https://packaginghub-dashboard.vercel.app',
+    ...(process.env.CORS_ORIGIN || 'http://localhost:5173,http://localhost:5000')
+      .split(',')
+      .map((s) => s.trim())
+      .filter(Boolean),
+  ])),
   mongoUri: () => required('MONGODB_URI'),
   jwt: {
     accessSecret: () => required('JWT_ACCESS_SECRET'),
