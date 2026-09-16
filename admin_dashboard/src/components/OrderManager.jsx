@@ -266,6 +266,30 @@ const OrderCard = ({ order, etaValue, onEtaChange, onSaveEta, savingEta, onUpdat
     : (order.delivery_address?.location_url || profile.location_url || null);
   const isDelivery = order.delivery_method === 'delivery';
 
+  let nextStatus = null;
+  let nextLabel = '';
+  let extraFields = {};
+
+  if (order.status === 'pending') {
+    nextStatus = 'processing';
+    nextLabel = 'Accept Order';
+  } else if (order.status === 'processing') {
+    nextStatus = 'packed';
+    nextLabel = 'Mark as Packed';
+  } else if (order.status === 'packed') {
+    if (isDelivery) {
+      nextStatus = 'out_for_delivery';
+      nextLabel = 'Out for Delivery';
+    } else {
+      nextStatus = 'picked_up';
+      nextLabel = 'Mark Picked Up & Paid';
+      extraFields = { payment_status: 'paid' };
+    }
+  } else if (order.status === 'out_for_delivery') {
+    nextStatus = 'delivered';
+    nextLabel = 'Mark Delivered';
+  }
+
   return (
     <div
       id={`order-${order.id}`}
@@ -280,28 +304,16 @@ const OrderCard = ({ order, etaValue, onEtaChange, onSaveEta, savingEta, onUpdat
             <span className={`px-2 py-1 rounded-lg border text-[11px] font-bold uppercase ${statusClasses[order.status] || statusClasses.pending}`}>
               {order.status}
             </span>
-            {order.status === 'pending' && (
+            {nextStatus && (
               <button
-                onClick={() => onUpdateStatus('processing')}
-                className="ml-2 px-3 py-1 bg-blue-100 hover:bg-blue-200 text-blue-700 rounded text-xs font-bold transition-colors cursor-pointer"
+                onClick={() => onUpdateStatus(nextStatus, extraFields)}
+                className={`ml-2 px-3 py-1 rounded text-xs font-bold transition-colors cursor-pointer ${
+                  nextStatus === 'delivered' || nextStatus === 'picked_up'
+                    ? 'bg-emerald-100 hover:bg-emerald-200 text-emerald-700'
+                    : 'bg-indigo-100 hover:bg-indigo-200 text-indigo-700'
+                }`}
               >
-                Accept Order
-              </button>
-            )}
-            {order.status === 'processing' && !isDelivery && (
-              <button
-                onClick={() => onUpdateStatus('packed')}
-                className="ml-2 px-3 py-1 bg-purple-100 hover:bg-purple-200 text-purple-700 rounded text-xs font-bold transition-colors cursor-pointer"
-              >
-                Mark as Packed
-              </button>
-            )}
-            {order.status === 'packed' && !isDelivery && (
-              <button
-                onClick={() => onUpdateStatus('picked_up', { payment_status: 'paid' })}
-                className="ml-2 px-3 py-1 bg-emerald-100 hover:bg-emerald-200 text-emerald-700 rounded text-xs font-bold transition-colors cursor-pointer"
-              >
-                Mark as Paid ✓
+                {nextLabel}
               </button>
             )}
           </div>
@@ -449,12 +461,6 @@ const EtaPanel = ({ order, etaValue, onEtaChange, onSaveEta, savingEta, onUpdate
             )}
           </div>
           <div className="flex gap-2">
-            <button
-              onClick={() => onUpdateStatus('delivered')}
-              className="flex-1 py-2 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 rounded-lg text-sm font-semibold transition-all cursor-pointer border border-emerald-100"
-            >
-              Mark Delivered
-            </button>
             <button
               onClick={() => setDelayMode(true)}
               className="flex-1 py-2 bg-rose-50 hover:bg-rose-100 text-rose-600 rounded-lg text-sm font-semibold transition-all cursor-pointer border border-rose-100"
